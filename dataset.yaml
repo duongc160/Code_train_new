@@ -1,0 +1,8 @@
+# YOLOv8 dataset configuration
+path: /home/nguyen/Downloads/UAV_Slicing/dataset_80_10_10
+train: images/train
+val: images/val
+test: images/test
+
+nc: 1
+names: ["uav"]

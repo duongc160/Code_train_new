@@ -1,0 +1,54 @@
+# Ultralytics YOLO11s - UAV Detection (Bỏ Swin, Fusion #2 và #16)
+nc: 1
+names: ['UAV']
+scales:
+  s: [0.50, 0.50, 1024]
+
+backbone:
+  - [-1, 1, Conv, [64, 3, 2]]    # 0 (P1/2)
+  - [-1, 1, Conv, [128, 3, 2]]   # 1 (P2/4)
+  - [-1, 2, C3k2, [256, False, 0.25]] # 2  <-- Sẽ được dùng để Fusion
+  - [-1, 1, Conv, [256, 3, 2]]   # 3 (P3/8)
+  - [-1, 2, C3k2, [512, False, 0.25]] # 4 
+  - [-1, 1, Conv, [512, 3, 2]]   # 5 (P4/16)
+  - [-1, 2, C3k2, [512, True]]   # 6 
+  - [-1, 1, Conv, [1024, 3, 2]]  # 7 (P5/32)
+  - [-1, 2, C3k2, [1024, True]]  # 8 
+  - [-1, 1, SPPF, [1024, 5]]     # 9
+  - [-1, 2, C2PSA, [1024]]       # 10
+
+head:
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 11 (Là #14 cũ)
+  - [[-1, 6], 1, Concat, [1]]    # 12 (Là #15 cũ)
+  - [-1, 2, C3k2, [512, False]]  # 13 (Chính là khối C3k2 #16 cũ mà bạn muốn lấy)
+  
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]] # 14
+  - [[-1, 4], 1, Concat, [1]]    # 15
+  - [-1, 2, C3k2, [256, False]]  # 16 (Là #19 cũ - Đầu ra nhánh P3)
+
+  - [-1, 1, Conv, [256, 3, 2]]   # 17
+  - [[-1, 13], 1, Concat, [1]]   # 18 (Nối với #13 mới)
+  - [-1, 2, C3k2, [512, False]]  # 19 (Là #22 cũ - Đầu ra nhánh P4)
+  
+  - [-1, 1, Conv, [512, 3, 2]]   # 20
+  - [[-1, 10], 1, Concat, [1]]   # 21
+  - [-1, 2, C3k2, [1024, True]]  # 22 (Là #25 cũ - Đầu ra nhánh P5)
+
+  # ==========================================
+  # NHÁNH FUSION MỚI DÀNH CHO DETECT 
+  # ==========================================
+  # Bước 1: Phóng to khối C3k2 #13 (là #16 cũ) lên 4 lần để bằng kích thước khối #2
+  - [13, 1, nn.Upsample, [None, 4, "nearest"]] # 23
+  
+  # Bước 2: Concat khối #2 và khối đã phóng to
+  - [[2, 23], 1, Concat, [1]]                  # 24
+  
+  # Bước 3: Đưa qua 1 khối C3k2 mới như bạn yêu cầu (Đầu ra nhánh P2)
+  - [-1, 2, C3k2, [256, False]]                # 25
+
+  # ==========================================
+  # DETECT HEAD
+  # ==========================================
+  # Nối 4 nhánh theo thứ tự độ phân giải từ lớn đến nhỏ (từ chi tiết đến tổng thể)
+  # [Fusion_P2, P3, P4, P5]
+  - [[25, 16, 19, 22], 1, Detect, [nc]]        # 26
